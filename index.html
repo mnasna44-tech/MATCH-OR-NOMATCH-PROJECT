@@ -6,29 +6,39 @@
 <title>Match or No Match</title>
 
 <style>
-body {
+body{
   margin:0;
   font-family:Arial;
   background:#F8F6F3;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
   text-align:center;
 }
 
-.top {
+.wrapper{
+  width:100%;
+  max-width:420px;
+}
+
+.top{
   display:flex;
   justify-content:space-around;
-  margin-top:10px;
+  margin:10px;
+  font-size:16px;
 }
 
-.game {
+.game{
   display:flex;
   justify-content:center;
-  gap:20px;
-  margin:30px;
+  gap:15px;
+  margin:20px 0;
 }
 
-.panel {
-  width:140px;
-  height:140px;
+.panel{
+  width:130px;
+  height:130px;
   background:white;
   border-radius:12px;
   display:flex;
@@ -37,39 +47,38 @@ body {
   box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
-.grid {
+.grid{
   display:grid;
   grid-template-columns:repeat(2,1fr);
   gap:5px;
 }
 
-.shape { width:30px; height:30px; }
-.circle { border-radius:50%; }
-
-.triangle {
-  width:0;height:0;
-  border-left:15px solid transparent;
-  border-right:15px solid transparent;
-  border-bottom:30px solid;
+.shape{
+  width:30px;
+  height:30px;
 }
 
-button {
-  padding:10px 20px;
-  margin:10px;
+button{
+  padding:7px 12px;
+  margin:5px;
   border:none;
   border-radius:8px;
-  background:#6C5CE7;
   color:white;
+  font-size:13px;
 }
 
-#msg {
-  height:30px;
-  font-size:18px;
+.match{background:#e74c3c;}
+.nomatch{background:#3498db;}
+
+#msg{
+  height:25px;
 }
 </style>
 </head>
 
 <body>
+
+<div class="wrapper">
 
 <h2>Match or No Match</h2>
 
@@ -83,76 +92,18 @@ button {
   <div class="panel" id="right"></div>
 </div>
 
-<button onclick="handleClick(true)">⬅ MATCH</button>
-<button onclick="handleClick(false)">NO MATCH ➡</button>
+<button class="match" onclick="answer(true)">MATCH</button>
+<button class="nomatch" onclick="answer(false)">NO MATCH</button>
 
 <div id="msg"></div>
 <div>Round: <span id="round">1</span>/15</div>
 
+</div>
+
 <script>
 
-const SoundEngine = {
-  ctx: null,
-
-  init() {
-    if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-  },
-
-  playTone(start, end, duration) {
-    const o = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-
-    o.type = "sine";
-    o.frequency.setValueAtTime(start, this.ctx.currentTime);
-    o.frequency.linearRampToValueAtTime(end, this.ctx.currentTime + duration);
-
-    g.gain.setValueAtTime(0.05, this.ctx.currentTime);
-
-    o.connect(g);
-    g.connect(this.ctx.destination);
-
-    o.start();
-    o.stop(this.ctx.currentTime + duration);
-  },
-
-  playReveal() {
-    this.playTone(300, 300, 0.1);
-  },
-
-  playCorrect() {
-    this.playTone(440, 660, 0.15);
-  },
-
-  playIncorrect() {
-    this.playTone(330, 220, 0.2);
-  },
-
-  playClick() {
-    this.playTone(800, 800, 0.02);
-  },
-
-  playLevelComplete() {
-    const notes = [523, 659, 784];
-    notes.forEach((f, i) => {
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-
-      o.frequency.value = f;
-      g.gain.value = 0.05;
-
-      o.connect(g);
-      g.connect(this.ctx.destination);
-
-      o.start(this.ctx.currentTime + i * 0.12);
-      o.stop(this.ctx.currentTime + i * 0.12 + 0.12);
-    });
-  }
-};
-
 let score=0, level=1, round=1, wrong=0;
-let isMatch=false, startTime=0;
+let isMatch=false, startTime=0, timer=null;
 
 const shapes=["circle","triangle"];
 const colors=["#E17055","#6C5CE7","#00B894","#FDCB6E"];
@@ -161,25 +112,48 @@ const left=document.getElementById("left");
 const right=document.getElementById("right");
 const msg=document.getElementById("msg");
 
+let audioCtx=null;
+function sound(freq){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  let o=audioCtx.createOscillator();
+  let g=audioCtx.createGain();
+
+  o.connect(g);
+  g.connect(audioCtx.destination);
+
+  o.frequency.value=freq;
+  g.gain.value=0.05;
+
+  o.start();
+  o.stop(audioCtx.currentTime+0.15);
+}
+
 function shape(s,c){
   let d=document.createElement("div");
-  d.className="shape";
 
   if(s==="circle"){
-    d.classList.add("circle");
+    d.style.width="30px";
+    d.style.height="30px";
+    d.style.borderRadius="50%";
     d.style.background=c;
   }
 
   if(s==="triangle"){
-    d.classList.add("triangle");
-    d.style.borderBottomColor=c;
+    d.style.width="0";
+    d.style.height="0";
+    d.style.borderLeft="15px solid transparent";
+    d.style.borderRight="15px solid transparent";
+    d.style.borderBottom="30px solid "+c;
   }
 
   return d;
 }
+
 function pattern(){
   let arr=[];
-  let count = level<=2?1:4;
+  let count=(level===1)?1:(level===2)?2:(level===3)?4:(level===4)?6:8;
 
   for(let i=0;i<count;i++){
     arr.push({
@@ -190,44 +164,45 @@ function pattern(){
   return arr;
 }
 
-function render(p,patt){
-  p.innerHTML="";
-  if(patt.length===1){
-    p.appendChild(shape(patt[0].s,patt[0].c));
-  } else {
-    let g=document.createElement("div");
-    g.className="grid";
-    patt.forEach(x=>g.appendChild(shape(x.s,x.c)));
-    p.appendChild(g);
+function render(pan,p){
+  pan.innerHTML="";
+  if(p.length===1){
+    pan.appendChild(shape(p[0].s,p[0].c));
+    return;
   }
+  let g=document.createElement("div");
+  g.className="grid";
+  p.forEach(x=>g.appendChild(shape(x.s,x.c)));
+  pan.appendChild(g);
 }
 
-function clone(p){ return JSON.parse(JSON.stringify(p)); }
+function clone(p){
+  return JSON.parse(JSON.stringify(p));
+}
 
 function modify(p){
   let n=clone(p);
   let i=Math.floor(Math.random()*n.length);
 
-  do{
-    n[i].s=shapes[Math.floor(Math.random()*shapes.length)];
-    n[i].c=colors[Math.floor(Math.random()*colors.length)];
-  }while(n[i].s===p[i].s && n[i].c===p[i].c);
+  n[i]={
+    s:shapes[Math.floor(Math.random()*shapes.length)],
+    c:colors[Math.floor(Math.random()*colors.length)]
+  };
 
   return n;
 }
 
+function getTime(){
+  if(level===1) return 999999;
+  if(level===2) return 6000;
+  if(level===3) return 4000;
+  return 3000;
+}
+
 function newRound(){
 
-  if(wrong>=5){
+  if(round>15 || wrong>=5){
     endGame();
-    return;
-  }
-  if(round>15){
-    level++;
-    round=1;
-
-    SoundEngine.playLevelComplete();
-    showLevelMessage();
     return;
   }
 
@@ -241,85 +216,59 @@ function newRound(){
   render(left,base);
   render(right,other);
 
-  SoundEngine.playReveal(); // ✅ correct sound
-
   startTime=Date.now();
-}
 
-function handleClick(user){
-  SoundEngine.init(); // 🔥 REQUIRED
-  SoundEngine.playClick();
-  answer(user);
+  clearTimeout(timer);
+  timer=setTimeout(()=>{
+    wrong++;
+    feedback(false,true);
+  },getTime());
 }
 
 function answer(user){
-  let correct=(user===isMatch);
+  clearTimeout(timer);
+  sound(400);
+  feedback(user===isMatch,false);
+}
+
+function feedback(correct,timeout){
 
   if(correct){
-    let t=(Date.now()-startTime)/1000;
-
-    score+=2;
-
-    if(t<2){
-      score+=1;
-    }
-
-    SoundEngine.playCorrect();
-
-    msg.innerText="Well done 😊";
+    score++;
+    msg.innerText="Correct 😊";
     msg.style.color="green";
-
-  } else {
+  }else{
     wrong++;
-    SoundEngine.playIncorrect();
-
-    msg.innerText="Good try 💛";
-    msg.style.color="#E17055";
+    msg.innerText="Wrong ❌";
+    msg.style.color="red";
   }
 
   document.getElementById("score").innerText=score;
 
   round++;
 
+  if(round>15){
+    round=1;
+    level++;
+    if(level>6) level=6;
+  }
+
   setTimeout(()=>{
     msg.innerText="";
     newRound();
-  },800);
+  },600);
 }
-
 function endGame(){
-
-  if(wrong<5){
-    SoundEngine.playLevelComplete(); // ✅ final sound
-  }
-
-  let text = wrong>=5 ? "Let’s try again 😊" : "Well done 🎉";
-
   document.body.innerHTML=`
-  <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;">
-    <h1>${text}</h1>
+  <div>
+    <h1>Game Over 🎮</h1>
     <h2>Score: ${score}</h2>
     <button onclick="location.reload()">Play Again</button>
   </div>`;
 }
-function showLevelMessage(){
-  msg.innerText="Level"+level+"🎉";
-  msg.style.color="#00B894";
-
-  setTimeout(()=>{
-    msg.innerText="";
-    newRound();
-  },1500);
-}
-document.addEventListener("keydown",e=>{
-  SoundEngine.init();
-  if(e.key==="ArrowLeft"){ SoundEngine.playClick(); answer(true); }
-  if(e.key==="ArrowRight"){ SoundEngine.playClick(); answer(false); }
-});
 
 newRound();
 
 </script>
-
 </body>
 </html>
